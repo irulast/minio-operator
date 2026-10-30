@@ -1,3 +1,27 @@
+# irulast MinIO Operator maintenance
+
+This public fork maintains the deployed v6 operator and sidecar contract, based
+on upstream v6.0.4. Security candidates are built and tested by cluster CI in
+`irulast/minio-build` and promoted by digest through GitOps. Candidate source is
+not a production release. Original upstream license and notices are retained.
+
+When a Tenant explicitly declares `MINIO_UPDATE=off` in `spec.env`, image changes
+use StatefulSet pod-template reconciliation without downloading or executing
+legacy binary-update artifacts. Existing claim templates are preserved, including
+claims expanded independently from their original template. The default update
+path remains compatible with upstream. Readiness checks still gate upgrades.
+
+Go 1.27.3, the current owned shared package, patched MinIO SDKs, and the
+Kubernetes 1.34 client line replace the original dependencies. Prometheus client
+APIs remain on the compatible 0.86 line; the latest 0.94 line requires Kubernetes
+1.37 APIs. Both module locks, tests, govulncheck, and full image reports are release
+gates. No scanner thresholds or suppressions are changed.
+
+The server, operator, and sidecar require independent tests, vulnerability checks,
+and an isolated upgrade/recovery rehearsal before production promotion.
+
+---
+
 # MinIO Operator
 
 ![build](https://github.com/minio/operator/workflows/Go/badge.svg) ![license](https://img.shields.io/badge/license-AGPL%20V3-blue)

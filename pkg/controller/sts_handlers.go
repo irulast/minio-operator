@@ -31,7 +31,7 @@ import (
 	"github.com/minio/operator/pkg/common"
 
 	"github.com/minio/operator/pkg/apis/sts.min.io/v1beta1"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/v3/policy"
 
 	"github.com/gorilla/mux"
 	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"

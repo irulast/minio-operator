@@ -22,7 +22,7 @@ import (
 	"crypto/sha1"
 	"strings"
 
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v3/env"
 	"golang.org/x/crypto/pbkdf2"
 )
 

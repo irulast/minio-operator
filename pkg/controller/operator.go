@@ -32,7 +32,7 @@ import (
 	"github.com/minio/operator/pkg/certs"
 
 	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
-	xcerts "github.com/minio/pkg/certs"
+	xcerts "github.com/minio/pkg/v3/certs"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
