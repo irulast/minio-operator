@@ -39,6 +39,10 @@ func (c *Controller) handlePodChange(obj interface{}) {
 		return
 	}
 
+	if !c.watchesNamespace(object.GetNamespace()) {
+		return
+	}
+
 	instanceName, ok := object.GetLabels()[miniov2.TenantLabel]
 	if !ok {
 		utilruntime.HandleError(fmt.Errorf("label: %s not found in %s", miniov2.TenantLabel, object.GetName()))

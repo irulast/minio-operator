@@ -32,8 +32,8 @@ import (
 
 	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
 	"github.com/minio/operator/pkg/controller/certificates"
-	xcerts "github.com/minio/pkg/certs"
-	"github.com/minio/pkg/env"
+	xcerts "github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/env"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,7 +54,7 @@ func (c *Controller) waitForCertSecretReady(serviceName string, secretName strin
 				klog.Infof("Waiting for the %s certificates secret to be issued", serviceName)
 				time.Sleep(time.Second * 10)
 			} else {
-				klog.Infof(err.Error())
+				klog.Info(err)
 			}
 		} else {
 			publicCertPath, publicKeyPath = c.writeCertSecretToFile(tlsCertSecret, serviceName)
@@ -132,7 +132,7 @@ func (c *Controller) generateTLSCertificateForService(serviceName, secretName, d
 				} else {
 					err = c.deleteCSR(ctx, csrName)
 					if err != nil {
-						klog.Infof(err.Error())
+						klog.Info(err)
 					}
 				}
 			}

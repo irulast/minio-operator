@@ -32,7 +32,7 @@ import (
 	"github.com/minio/operator/pkg/certs"
 
 	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
-	xcerts "github.com/minio/pkg/certs"
+	xcerts "github.com/minio/pkg/v3/certs"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -244,7 +244,7 @@ func (c *Controller) createUsers(ctx context.Context, tenant *miniov2.Tenant, te
 	defer func() {
 		if err == nil {
 			if _, err = c.updateProvisionedUsersStatus(ctx, tenant, true); err != nil {
-				klog.V(2).Infof(err.Error())
+				klog.V(2).Info(err)
 			}
 		}
 	}()
@@ -296,7 +296,7 @@ func (c *Controller) createBuckets(ctx context.Context, tenant *miniov2.Tenant, 
 	}
 	if created {
 		if _, err = c.updateProvisionedBucketStatus(ctx, tenant, true); err != nil {
-			klog.V(2).Infof(err.Error())
+			klog.V(2).Info(err)
 		}
 	}
 	return created, err

@@ -67,6 +67,9 @@ func (c *Controller) tenantsHealthMonitor() error {
 		return err
 	}
 	for _, t := range tenants.Items {
+		if !c.watchesNamespace(t.Namespace) {
+			continue
+		}
 		tenant, err := c.updateHealthStatusForTenant(&t)
 		if err != nil {
 			klog.Errorf("%v", err)
@@ -82,6 +85,9 @@ func (c *Controller) tenantsHealthMonitor() error {
 }
 
 func (c *Controller) updateHealthStatusForTenant(tenant *miniov2.Tenant) (*miniov2.Tenant, error) {
+	if !c.watchesNamespace(tenant.Namespace) {
+		return nil, nil
+	}
 	// don't get the tenant cluster health if it doesn't have at least 1 pool initialized
 	oneInitialized := false
 	for _, pool := range tenant.Status.Pools {
@@ -300,6 +306,9 @@ func (c *Controller) syncHealthCheckHandler(key string) (Result, error) {
 	}
 
 	namespace, tenantName := key2NamespaceName(key)
+	if !c.watchesNamespace(namespace) {
+		return WrapResult(Result{}, nil)
+	}
 
 	// Get the Tenant resource with this namespace/name
 	tenant, err := c.minioClientSet.MinioV2().Tenants(namespace).Get(context.Background(), tenantName, metav1.GetOptions{})

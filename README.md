@@ -1,3 +1,31 @@
+# irulast MinIO Operator maintenance
+
+This public fork maintains the deployed v6 operator and sidecar contract, based
+on upstream v6.0.4. Security candidates are built and tested by cluster CI in
+`irulast/minio-build` and promoted by digest through GitOps. Candidate source is
+not a production release. Original upstream license and notices are retained.
+
+When a Tenant explicitly declares `MINIO_UPDATE=off` in `spec.env`, image changes
+use StatefulSet pod-template reconciliation without downloading or executing
+legacy binary-update artifacts. Existing claim templates are preserved, including
+claims expanded independently from their original template. The default update
+path remains compatible with upstream. Readiness checks still gate upgrades.
+
+Go 1.27.3, the current owned shared package, and patched MinIO SDKs replace the
+original dependencies. Prometheus v0.311.3 addresses CVE-2026-42151,
+CVE-2026-42154, CVE-2026-40179, and CVE-2026-44903. Its Kubernetes dependency
+requires the 1.35 client line, pinned to 0.35.10 with controller-runtime 0.23.3;
+this does not change the Kubernetes cluster version. Prometheus Operator client
+APIs remain on the compatible 0.86 line. The dependency locks were resolved and
+verified by cluster workflow 41152860264. Both module locks, tests, govulncheck,
+fresh full-image reports, and live cluster compatibility remain release gates.
+No scanner thresholds or suppressions are changed.
+
+The server, operator, and sidecar require independent tests, vulnerability checks,
+and an isolated upgrade/recovery rehearsal before production promotion.
+
+---
+
 # MinIO Operator
 
 ![build](https://github.com/minio/operator/workflows/Go/badge.svg) ![license](https://img.shields.io/badge/license-AGPL%20V3-blue)
@@ -234,3 +262,9 @@ Use of MinIO Operator is governed by the GNU AGPLv3 or later, found in the [LICE
 - [Deploy MinIO Tenant with KES](shttps://github.com/minio/operator/blob/master/docs/kes.md).
 - [Tenant API Documentation](docs/tenant_crd.adoc)
 - [Policy Binding API Documentation](docs/policybinding_crd.adoc)
+
+The owned controller applies `WATCHED_NAMESPACE` to periodic health monitoring,
+pod-change health queues, and worker entry points as well as ordinary Tenant
+reconciliation. Its global informers can still observe workload metadata; use
+namespace-scoped RBAC for mutation isolation. In-memory tests assert that health
+workers do not fetch credentials or write status outside the configured scope.

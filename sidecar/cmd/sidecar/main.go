@@ -25,9 +25,9 @@ import (
 	"github.com/minio/operator/sidecar/pkg"
 
 	"github.com/minio/cli"
-	"github.com/minio/pkg/console"
-	"github.com/minio/pkg/trie"
-	"github.com/minio/pkg/words"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/trie"
+	"github.com/minio/pkg/v3/words"
 )
 
 // Help template for Operator.

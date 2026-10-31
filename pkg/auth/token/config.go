@@ -18,7 +18,7 @@ package token
 
 import (
 	"github.com/minio/operator/pkg/auth/utils"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v3/env"
 )
 
 var defaultPBKDFPassphrase = utils.RandomCharString(64)

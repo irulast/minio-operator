@@ -25,7 +25,7 @@ import (
 
 	stsv1alpha1 "github.com/minio/operator/pkg/apis/sts.min.io/v1alpha1"
 
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v3/env"
 
 	"github.com/minio/operator/pkg"
 

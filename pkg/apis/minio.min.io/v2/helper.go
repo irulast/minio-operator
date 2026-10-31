@@ -47,7 +47,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -399,8 +399,8 @@ func (t *Tenant) MinIOEndpoints(hostsTemplate string) (endpoints []string) {
 
 // GenBearerToken returns the JWT token for current Tenant for Prometheus authentication
 func (t *Tenant) GenBearerToken(accessKey, secretKey string) string {
-	jwt := jwt.NewWithClaims(jwt.SigningMethodHS512, jwt.StandardClaims{
-		ExpiresAt: time.Now().UTC().Add(defaultPrometheusJWTExpiry).Unix(),
+	jwt := jwt.NewWithClaims(jwt.SigningMethodHS512, jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(defaultPrometheusJWTExpiry)),
 		Subject:   accessKey,
 		Issuer:    "prometheus",
 	})
@@ -432,7 +432,7 @@ func (t *Tenant) TemplatedMinIOHosts(hostsTemplate string) (hosts []string) {
 	tmpl, err := template.New("hosts").Parse(hostsTemplate)
 	if err != nil {
 		msg := "Invalid go template for hosts"
-		klog.V(2).Infof(msg)
+		klog.V(2).Info(msg)
 		return hosts
 	}
 	var max, index int32
@@ -475,7 +475,7 @@ func (t *Tenant) ConsoleServerHost() string {
 func (t *Tenant) MinIOHeadlessServiceHost() string {
 	if t.Spec.Pools[0].Servers == 1 {
 		msg := "Please set the server count > 1"
-		klog.V(2).Infof(msg)
+		klog.V(2).Info(msg)
 		return ""
 	}
 	return fmt.Sprintf("%s.%s.svc.%s", t.MinIOHLServiceName(), t.Namespace, GetClusterDomain())

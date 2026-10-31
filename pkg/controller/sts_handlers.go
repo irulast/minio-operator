@@ -31,7 +31,7 @@ import (
 	"github.com/minio/operator/pkg/common"
 
 	"github.com/minio/operator/pkg/apis/sts.min.io/v1beta1"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	iampolicy "github.com/minio/pkg/v3/policy"
 
 	"github.com/gorilla/mux"
 	miniov2 "github.com/minio/operator/pkg/apis/minio.min.io/v2"
@@ -216,7 +216,7 @@ func (c *Controller) AssumeRoleWithWebIdentityHandler(w http.ResponseWriter, r *
 	var bfPolicy iampolicy.Policy
 	for _, pb := range policyBindings {
 		if sessionPolicy != nil {
-			bfPolicy = bfPolicy.Merge(*sessionPolicy)
+			bfPolicy = iampolicy.MergePolicies(bfPolicy, *sessionPolicy)
 		}
 		for _, policyName := range pb.Spec.Policies {
 			policy, err := GetPolicy(ctx, adminClient, policyName)
@@ -229,7 +229,7 @@ func (c *Controller) AssumeRoleWithWebIdentityHandler(w http.ResponseWriter, r *
 				klog.Error(fmt.Errorf("Invalid policy, '%s' isnot parseable ignoring: %s", policyName, err))
 				continue
 			}
-			bfPolicy = bfPolicy.Merge(*parsedPolicy)
+			bfPolicy = iampolicy.MergePolicies(bfPolicy, *parsedPolicy)
 		}
 	}
 	bfJSONPolicy, _ := json.Marshal(bfPolicy)

@@ -33,7 +33,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/operator/pkg/common"
-	xcerts "github.com/minio/pkg/certs"
+	xcerts "github.com/minio/pkg/v3/certs"
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/operator/pkg/controller/certificates"
@@ -687,6 +687,19 @@ func key2NamespaceName(key string) (namespace, name string) {
 	return key[:m], key[m+len(slashSeparator):]
 }
 
+// tenantDisablesInPlaceUpdate requires a literal declaration in the Tenant.
+// Secret-backed or absent values keep the existing update path. The last entry
+// wins, matching the configuration builder's environment merge semantics.
+func tenantDisablesInPlaceUpdate(tenant *miniov2.Tenant) bool {
+	for i := len(tenant.Spec.Env) - 1; i >= 0; i-- {
+		value := tenant.Spec.Env[i]
+		if value.Name == "MINIO_UPDATE" {
+			return value.ValueFrom == nil && value.Value == "off"
+		}
+	}
+	return false
+}
+
 func (c *Controller) updateServer(
 	ctx context.Context,
 	tenantName string,
@@ -796,6 +809,9 @@ func (c *Controller) syncHandler(key string) (Result, error) {
 	}
 
 	namespace, tenantName := key2NamespaceName(key)
+	if !c.watchesNamespace(namespace) {
+		return WrapResult(Result{}, nil)
+	}
 
 	// Get the Tenant resource with this namespace/name
 	tenant, err := c.minioClientSet.MinioV2().Tenants(namespace).Get(context.Background(), tenantName, metav1.GetOptions{})
@@ -840,7 +856,7 @@ func (c *Controller) syncHandler(key string) (Result, error) {
 	if err != nil {
 		if errors.Is(err, ErrEmptyRootCredentials) {
 			if _, err2 := c.updateTenantStatus(ctx, tenant, err.Error(), 0); err2 != nil {
-				klog.V(2).Infof(err2.Error())
+				klog.V(2).Info(err2)
 			}
 			c.recorder.Event(tenant, corev1.EventTypeWarning, "MissingCreds", "Tenant is missing root credentials")
 			return WrapResult(Result{}, nil)
@@ -863,10 +879,10 @@ func (c *Controller) syncHandler(key string) (Result, error) {
 
 	// Validate the MinIO Tenant
 	if err = tenant.Validate(); err != nil {
-		klog.V(2).Infof(err.Error())
+		klog.V(2).Info(err)
 		var err2 error
 		if _, err2 = c.updateTenantStatus(ctx, tenant, err.Error(), 0); err2 != nil {
-			klog.V(2).Infof(err2.Error())
+			klog.V(2).Info(err2)
 		}
 		// return nil so we don't re-queue this work item
 		return WrapResult(Result{}, nil)
@@ -896,20 +912,20 @@ func (c *Controller) syncHandler(key string) (Result, error) {
 			autoCertEnabled = tenant.AutoCert()
 		}
 		if tenant, err = c.updateCertificatesStatus(ctx, tenant, autoCertEnabled); err != nil {
-			klog.V(2).Infof(err.Error())
+			klog.V(2).Info(err)
 		}
 	}
 
 	// Custom certificates
 	if customCertificates, err := c.getCustomCertificates(ctx, tenant); err == nil {
 		if newTenant, err := c.updateCustomCertificatesStatus(ctx, tenant, customCertificates); err != nil {
-			klog.V(2).Infof(err.Error())
+			klog.V(2).Info(err)
 		} else {
 			// Only change tenant if there was no error, otherwise tenant is being deleted
 			tenant = newTenant
 		}
 	} else {
-		klog.V(2).Infof(err.Error())
+		klog.V(2).Info(err)
 	}
 
 	// validate the minio certificates
@@ -1169,17 +1185,7 @@ func (c *Controller) syncHandler(key string) (Result, error) {
 
 	// In loop above we compared all the versions in all pools.
 	// So comparing tenant.Spec.Image (version to update to) against one value from images slice is fine.
-	ssImages := strings.Split(images[0], ":")
-	specImages := strings.Split(tenant.Spec.Image, ":")
-	var ssImage string
-	var specImage string
-	if len(specImages) > 1 {
-		specImage = specImages[1]
-	}
-	if len(ssImages) > 1 {
-		ssImage = ssImages[1]
-	}
-	if specImage != ssImage && tenant.Status.CurrentState != StatusUpdatingMinIOVersion {
+	if images[0] != tenant.Spec.Image && tenant.Status.CurrentState != StatusUpdatingMinIOVersion {
 		if !tenant.MinIOHealthCheck(c.getTransport()) {
 			klog.Infof("%s is not running can't update image online", key)
 			return WrapResult(Result{}, ErrMinIONotReady)
@@ -1192,60 +1198,67 @@ func (c *Controller) syncHandler(key string) (Result, error) {
 			return WrapResult(Result{}, err)
 		}
 
-		klog.V(4).Infof("Collecting artifacts for Tenant '%s' to update MinIO from: %s, to: %s",
-			tenantName, images[0], tenant.Spec.Image)
+		if tenantDisablesInPlaceUpdate(tenant) {
+			// Immutable image updates must not fetch or execute binary-update
+			// artifacts. The common reconciliation loop below updates only the
+			// pod template and preserves the existing PVC templates and metadata.
+			c.recorder.Event(tenant, corev1.EventTypeNormal, "ImageUpdate", "Updating the pod image with in-place binary updates disabled")
+		} else {
+			klog.V(4).Infof("Collecting artifacts for Tenant '%s' to update MinIO from: %s, to: %s",
+				tenantName, images[0], tenant.Spec.Image)
 
-		latest, err := c.fetchArtifacts(tenant)
-		if err != nil {
-			// Do not remove assets with errors, keep them for investigation.
-			return WrapResult(Result{}, err)
-		}
-		defer c.removeArtifacts()
-		updateURL, err := tenant.UpdateURL(latest, fmt.Sprintf("http://operator.%s.svc.%s:%s%s",
-			miniov2.GetNSFromFile(),
-			miniov2.GetClusterDomain(),
-			common.UpgradeServerPort,
-			common.WebhookAPIUpdate,
-		))
-		if err != nil {
-			err = fmt.Errorf("Unable to get canonical update URL for Tenant '%s', failed with %v", tenantName, err)
-			if _, terr := c.updateTenantStatus(ctx, tenant, err.Error(), totalAvailableReplicas); terr != nil {
-				return WrapResult(Result{}, terr)
-			}
-
-			// Correct URL could not be obtained, not proceeding to update.
-			return WrapResult(Result{}, err)
-		}
-
-		klog.V(4).Infof("Updating Tenant %s MinIO version from: %s, to: %s -> URL: %s",
-			tenantName, tenant.Spec.Image, images[0], updateURL)
-
-		if err := c.updateServer(
-			ctx,
-			tenantName,
-			tenant,
-			totalAvailableReplicas,
-			adminClnt,
-			updateURL,
-		); err != nil {
-			return WrapResult(Result{}, err)
-		}
-
-		for i, pool := range tenant.Spec.Pools {
-			// Now proceed to make the yaml changes for the tenant statefulset.
-			ss := statefulsets.NewPool(&statefulsets.NewPoolArgs{
-				Tenant:          tenant,
-				SkipEnvVars:     skipEnvVars,
-				Pool:            &pool,
-				PoolStatus:      &tenant.Status.Pools[i],
-				ServiceName:     tenant.MinIOHLServiceName(),
-				HostsTemplate:   c.hostsTemplate,
-				OperatorVersion: c.operatorVersion,
-			})
-			if _, err = c.kubeClientSet.AppsV1().StatefulSets(tenant.Namespace).Update(ctx, ss, uOpts); err != nil {
+			latest, err := c.fetchArtifacts(tenant)
+			if err != nil {
+				// Do not remove assets with errors, keep them for investigation.
 				return WrapResult(Result{}, err)
 			}
-			c.recorder.Event(tenant, corev1.EventTypeNormal, "PoolUpdated", fmt.Sprintf("Tenant pool %s updated", pool.Name))
+			defer c.removeArtifacts()
+			updateURL, err := tenant.UpdateURL(latest, fmt.Sprintf("http://operator.%s.svc.%s:%s%s",
+				miniov2.GetNSFromFile(),
+				miniov2.GetClusterDomain(),
+				common.UpgradeServerPort,
+				common.WebhookAPIUpdate,
+			))
+			if err != nil {
+				err = fmt.Errorf("Unable to get canonical update URL for Tenant '%s', failed with %v", tenantName, err)
+				if _, terr := c.updateTenantStatus(ctx, tenant, err.Error(), totalAvailableReplicas); terr != nil {
+					return WrapResult(Result{}, terr)
+				}
+
+				// Correct URL could not be obtained, not proceeding to update.
+				return WrapResult(Result{}, err)
+			}
+
+			klog.V(4).Infof("Updating Tenant %s MinIO version from: %s, to: %s -> URL: %s",
+				tenantName, tenant.Spec.Image, images[0], updateURL)
+
+			if err := c.updateServer(
+				ctx,
+				tenantName,
+				tenant,
+				totalAvailableReplicas,
+				adminClnt,
+				updateURL,
+			); err != nil {
+				return WrapResult(Result{}, err)
+			}
+
+			for i, pool := range tenant.Spec.Pools {
+				// Now proceed to make the yaml changes for the tenant statefulset.
+				ss := statefulsets.NewPool(&statefulsets.NewPoolArgs{
+					Tenant:          tenant,
+					SkipEnvVars:     skipEnvVars,
+					Pool:            &pool,
+					PoolStatus:      &tenant.Status.Pools[i],
+					ServiceName:     tenant.MinIOHLServiceName(),
+					HostsTemplate:   c.hostsTemplate,
+					OperatorVersion: c.operatorVersion,
+				})
+				if _, err = c.kubeClientSet.AppsV1().StatefulSets(tenant.Namespace).Update(ctx, ss, uOpts); err != nil {
+					return WrapResult(Result{}, err)
+				}
+				c.recorder.Event(tenant, corev1.EventTypeNormal, "PoolUpdated", fmt.Sprintf("Tenant pool %s updated", pool.Name))
+			}
 		}
 
 	}
@@ -1426,6 +1439,12 @@ func (c *Controller) syncHandler(key string) (Result, error) {
 	return WrapResult(Result{}, err)
 }
 
+// watchesNamespace applies the configured reconciliation scope to every worker,
+// including health monitoring. Informers may observe objects outside this scope.
+func (c *Controller) watchesNamespace(namespace string) bool {
+	return c.namespacesToWatch.IsEmpty() || c.namespacesToWatch.Contains(namespace)
+}
+
 // enqueueTenant takes a Tenant resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than Tenant.
@@ -1441,7 +1460,7 @@ func (c *Controller) enqueueTenant(obj interface{}) {
 			runtime.HandleError(err)
 			return
 		}
-		if !c.namespacesToWatch.Contains(meta.GetNamespace()) {
+		if !c.watchesNamespace(meta.GetNamespace()) {
 			klog.Infof("Ignoring tenant `%s` in namespace that is not watched by this controller.", key)
 			return
 		}
