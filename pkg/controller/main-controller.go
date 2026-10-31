@@ -809,6 +809,9 @@ func (c *Controller) syncHandler(key string) (Result, error) {
 	}
 
 	namespace, tenantName := key2NamespaceName(key)
+	if !c.watchesNamespace(namespace) {
+		return WrapResult(Result{}, nil)
+	}
 
 	// Get the Tenant resource with this namespace/name
 	tenant, err := c.minioClientSet.MinioV2().Tenants(namespace).Get(context.Background(), tenantName, metav1.GetOptions{})
@@ -1436,6 +1439,12 @@ func (c *Controller) syncHandler(key string) (Result, error) {
 	return WrapResult(Result{}, err)
 }
 
+// watchesNamespace applies the configured reconciliation scope to every worker,
+// including health monitoring. Informers may observe objects outside this scope.
+func (c *Controller) watchesNamespace(namespace string) bool {
+	return c.namespacesToWatch.IsEmpty() || c.namespacesToWatch.Contains(namespace)
+}
+
 // enqueueTenant takes a Tenant resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than Tenant.
@@ -1451,7 +1460,7 @@ func (c *Controller) enqueueTenant(obj interface{}) {
 			runtime.HandleError(err)
 			return
 		}
-		if !c.namespacesToWatch.Contains(meta.GetNamespace()) {
+		if !c.watchesNamespace(meta.GetNamespace()) {
 			klog.Infof("Ignoring tenant `%s` in namespace that is not watched by this controller.", key)
 			return
 		}

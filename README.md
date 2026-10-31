@@ -262,3 +262,9 @@ Use of MinIO Operator is governed by the GNU AGPLv3 or later, found in the [LICE
 - [Deploy MinIO Tenant with KES](shttps://github.com/minio/operator/blob/master/docs/kes.md).
 - [Tenant API Documentation](docs/tenant_crd.adoc)
 - [Policy Binding API Documentation](docs/policybinding_crd.adoc)
+
+The owned controller applies `WATCHED_NAMESPACE` to periodic health monitoring,
+pod-change health queues, and worker entry points as well as ordinary Tenant
+reconciliation. Its global informers can still observe workload metadata; use
+namespace-scoped RBAC for mutation isolation. In-memory tests assert that health
+workers do not fetch credentials or write status outside the configured scope.
