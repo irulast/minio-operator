@@ -24,7 +24,9 @@ func TestScopedHealthWorkers(t *testing.T) {
 	outside.Status.Pools = []miniov2.PoolStatus{{State: miniov2.PoolInitialized}}
 	kube := kubefake.NewSimpleClientset()
 	minio := miniofake.NewSimpleClientset(outside)
-	c := &Controller{namespacesToWatch: set.NewStringSet("inside"), kubeClientSet: kube, minioClientSet: minio}
+	scope := set.NewStringSet()
+	scope.Add("inside")
+	c := &Controller{namespacesToWatch: scope, kubeClientSet: kube, minioClientSet: minio}
 	if err := c.tenantsHealthMonitor(); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +53,10 @@ func TestScopedHealthWorkers(t *testing.T) {
 
 func TestHealthScopeIncludesConfiguredAndUnrestrictedTenants(t *testing.T) {
 	tenant := &miniov2.Tenant{ObjectMeta: metav1.ObjectMeta{Name: "new-store", Namespace: "inside"}}
-	for _, scope := range []set.StringSet{nil, set.NewStringSet("inside", "another")} {
+	configured := set.NewStringSet()
+	configured.Add("inside")
+	configured.Add("another")
+	for _, scope := range []set.StringSet{nil, configured} {
 		c := &Controller{namespacesToWatch: scope}
 		got, err := c.updateHealthStatusForTenant(tenant)
 		if err != nil || got != tenant {
