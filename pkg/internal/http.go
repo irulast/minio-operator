@@ -3,7 +3,6 @@ package http
 import (
 	"bytes"
 	"encoding/xml"
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
