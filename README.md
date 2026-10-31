@@ -11,11 +11,15 @@ legacy binary-update artifacts. Existing claim templates are preserved, includin
 claims expanded independently from their original template. The default update
 path remains compatible with upstream. Readiness checks still gate upgrades.
 
-Go 1.27.3, the current owned shared package, patched MinIO SDKs, and the
-Kubernetes 1.34 client line replace the original dependencies. Prometheus client
-APIs remain on the compatible 0.86 line; the latest 0.94 line requires Kubernetes
-1.37 APIs. Both module locks, tests, govulncheck, and full image reports are release
-gates. No scanner thresholds or suppressions are changed.
+Go 1.27.3, the current owned shared package, and patched MinIO SDKs replace the
+original dependencies. Prometheus v0.311.3 addresses CVE-2026-42151,
+CVE-2026-42154, CVE-2026-40179, and CVE-2026-44903. Its Kubernetes dependency
+requires the 1.35 client line, pinned to 0.35.10 with controller-runtime 0.23.3;
+this does not change the Kubernetes cluster version. Prometheus Operator client
+APIs remain on the compatible 0.86 line. The dependency locks were resolved and
+verified by cluster workflow 41152860264. Both module locks, tests, govulncheck,
+fresh full-image reports, and live cluster compatibility remain release gates.
+No scanner thresholds or suppressions are changed.
 
 The server, operator, and sidecar require independent tests, vulnerability checks,
 and an isolated upgrade/recovery rehearsal before production promotion.
