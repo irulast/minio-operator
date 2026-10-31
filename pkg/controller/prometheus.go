@@ -56,7 +56,9 @@ func (c *Controller) getPrometheuses(ctx context.Context) ([]*promv1.Prometheus,
 		if err != nil {
 			return nil, err
 		}
-		pList = promList.Items
+		for i := range promList.Items {
+			pList = append(pList, &promList.Items[i])
+		}
 
 	}
 	return pList, nil
@@ -82,7 +84,9 @@ func (c *Controller) getPrometheusAgents(ctx context.Context) ([]*promv1alpha1.P
 		if err != nil {
 			return nil, err
 		}
-		pList = promAgentList.Items
+		for i := range promAgentList.Items {
+			pList = append(pList, &promAgentList.Items[i])
+		}
 	}
 	return pList, nil
 }
